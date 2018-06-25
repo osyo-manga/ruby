@@ -2421,7 +2421,7 @@ eqq_i(VALUE key, VALUE value, VALUE args)
 {
     VALUE hash = ((VALUE *)args)[0];
     if (rb_funcall(value, idEqq, 1, rb_hash_aref(hash, key))) {
-        return ST_CONTINUE;
+	return ST_CONTINUE;
     }
     ((VALUE *)args)[1] = Qfalse;
     return ST_STOP;
@@ -2435,7 +2435,11 @@ rb_hash_eqq(VALUE hash1, VALUE hash2)
     args[1] = Qtrue;
 
     if (RHASH_EMPTY_P(hash1)) {
-        return Qfalse;
+        return (RB_TYPE_P(hash2, T_HASH) && RHASH_EMPTY_P(hash2)) ? Qtrue : Qfalse;
+// 	if (RB_TYPE_P(hash, T_HASH) && RHASH_EMPTY_P(hash2)) {
+// 	    return Qtrue;
+// 	}
+// 	return Qfalse;
     }
 
     rb_hash_foreach(hash1, eqq_i, (VALUE)args);

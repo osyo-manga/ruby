@@ -1114,6 +1114,7 @@ class TestHash < Test::Unit::TestCase
     assert_operator({ id: Integer }, :===, user)
     assert_operator({ name: String, age: Integer }, :===, user)
     assert_operator({ name: /m/ }, :===, user)
+    assert_operator({}, :===, {})
     obj = Object.new
     def obj.=== other
       true
@@ -1123,7 +1124,9 @@ class TestHash < Test::Unit::TestCase
     assert_not_operator({ id: 2 }, :===, user)
     assert_not_operator({ name: Integer }, :===, user)
     assert_not_operator({ number: 42 }, :===, user)
+    assert_not_operator({ number: 42 }, :===, {})
     assert_not_operator({}, :===, user)
+    assert_not_operator({}, :===, 42)
     obj2 = Object.new
     def obj2.=== other
       false
