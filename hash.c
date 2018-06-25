@@ -2415,6 +2415,33 @@ rb_hash_eql(VALUE hash1, VALUE hash2)
     return hash_equal(hash1, hash2, TRUE);
 }
 
+
+static int
+eqq_i(VALUE key, VALUE value, VALUE args)
+{
+    VALUE hash = ((VALUE *)args)[0];
+    if (rb_funcall(value, idEqq, 1, rb_hash_aref(hash, key))) {
+        return ST_CONTINUE;
+    }
+    ((VALUE *)args)[1] = Qfalse;
+    return ST_STOP;
+}
+
+static VALUE
+rb_hash_eqq(VALUE hash1, VALUE hash2)
+{
+    VALUE args[2];
+    args[0] = hash2;
+    args[1] = Qtrue;
+
+    if (RHASH_EMPTY_P(hash1)) {
+        return Qfalse;
+    }
+
+    rb_hash_foreach(hash1, eqq_i, (VALUE)args);
+    return args[1];
+}
+
 static int
 hash_i(VALUE key, VALUE val, VALUE arg)
 {
@@ -4696,6 +4723,7 @@ Init_Hash(void)
     rb_define_method(rb_cHash, "to_proc", rb_hash_to_proc, 0);
 
     rb_define_method(rb_cHash, "==", rb_hash_equal, 1);
+    rb_define_method(rb_cHash, "===", rb_hash_eqq, 1);
     rb_define_method(rb_cHash, "[]", rb_hash_aref, 1);
     rb_define_method(rb_cHash, "hash", rb_hash_hash, 0);
     rb_define_method(rb_cHash, "eql?", rb_hash_eql, 1);
