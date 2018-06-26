@@ -2420,7 +2420,7 @@ static int
 eqq_i(VALUE key, VALUE value, VALUE args)
 {
     VALUE hash = ((VALUE *)args)[0];
-    if (rb_funcall(value, idEqq, 1, rb_hash_aref(hash, key))) {
+    if (rb_hash_has_key(hash, key) && rb_funcall(value, idEqq, 1, rb_hash_aref(hash, key))) {
 	return ST_CONTINUE;
     }
     ((VALUE *)args)[1] = Qfalse;
