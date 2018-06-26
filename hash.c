@@ -2420,9 +2420,11 @@ static int
 eqq_i(VALUE key, VALUE value, VALUE args)
 {
     VALUE hash = ((VALUE *)args)[0];
+
     if (rb_hash_has_key(hash, key) && rb_funcall(value, idEqq, 1, rb_hash_aref(hash, key))) {
 	return ST_CONTINUE;
     }
+
     ((VALUE *)args)[1] = Qfalse;
     return ST_STOP;
 }
@@ -2434,8 +2436,12 @@ rb_hash_eqq(VALUE hash1, VALUE hash2)
     args[0] = hash2;
     args[1] = Qtrue;
 
+    if (!RB_TYPE_P(hash2, T_HASH)) {
+	return Qfalse;
+    }
+
     if (RHASH_EMPTY_P(hash1)) {
-	return (RB_TYPE_P(hash2, T_HASH) && RHASH_EMPTY_P(hash2)) ? Qtrue : Qfalse;
+	return RHASH_EMPTY_P(hash2) ? Qtrue : Qfalse;
     }
 
     rb_hash_foreach(hash1, eqq_i, (VALUE)args);
