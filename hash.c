@@ -2452,14 +2452,7 @@ rb_hash_eqq(VALUE hash1, VALUE hash2)
     struct equal_data data;
 
     if (hash1 == hash2) return Qtrue;
-    if (!RB_TYPE_P(hash2, T_HASH)) {
-	if (!rb_respond_to(hash2, idTo_hash)) {
-	    return Qfalse;
-	}
-        else {
-	    return rb_funcall(hash2, idEqq, 1, hash1);
-        }
-    }
+    if (!RB_TYPE_P(hash2, T_HASH)) return Qfalse;
     if (RHASH_EMPTY_P(hash1))
 	return RHASH_EMPTY_P(hash2) ? Qtrue : Qfalse;
     if (RHASH_SIZE(hash1) > RHASH_SIZE(hash2))
