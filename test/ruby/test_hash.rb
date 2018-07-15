@@ -1121,6 +1121,12 @@ class TestHash < Test::Unit::TestCase
       true
     end
     assert_operator({ id: obj }, :===, user)
+    a = { name: String }
+    a[:a] = a
+    assert_operator(a, :===, a)
+    b = { name: "homu" }
+    b[:a] = b
+    assert_operator(a, :===, b)
 
     assert_not_operator({ id: 2 }, :===, user)
     assert_not_operator({ name: Integer }, :===, user)
@@ -1137,6 +1143,11 @@ class TestHash < Test::Unit::TestCase
       false
     end
     assert_not_operator({ id: obj2 }, :===, user)
+    a = { name: Integer }
+    a[:a] = a
+    b = { name: "homu" }
+    b[:a] = b
+    assert_not_operator(a, :===, b)
   end
 
   def test_hash2

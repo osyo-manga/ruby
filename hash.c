@@ -2417,35 +2417,60 @@ rb_hash_eql(VALUE hash1, VALUE hash2)
 
 
 static int
-eqq_i(VALUE key, VALUE value, VALUE args)
+eqq_i(VALUE key, VALUE val1, VALUE arg)
 {
-    VALUE hash = ((VALUE *)args)[0];
+    struct equal_data *data = (struct equal_data *)arg;
+    st_data_t val2;
 
-    if (rb_hash_has_key(hash, key) && rb_funcall(value, idEqq, 1, rb_hash_aref(hash, key))) {
-	return ST_CONTINUE;
+    if (!st_lookup(data->tbl, key, &val2)) {
+	data->result = Qfalse;
+	return ST_STOP;
     }
+    if (!rb_funcall(val1, idEqq, 1, (VALUE)val2)) {
+	data->result = Qfalse;
+	return ST_STOP;
+    }
+    return ST_CONTINUE;
+}
 
-    ((VALUE *)args)[1] = Qfalse;
-    return ST_STOP;
+static VALUE
+recursive_eqq(VALUE hash, VALUE dt, int recur)
+{
+    struct equal_data *data;
+
+    if (recur) return Qtrue;	/* Subtle! */
+    data = (struct equal_data*)dt;
+    data->result = Qtrue;
+    rb_hash_foreach(hash, eqq_i, dt);
+
+    return data->result;
 }
 
 static VALUE
 rb_hash_eqq(VALUE hash1, VALUE hash2)
 {
-    VALUE args[2];
-    args[0] = hash2;
-    args[1] = Qtrue;
+    struct equal_data data;
 
+    if (hash1 == hash2) return Qtrue;
     if (!RB_TYPE_P(hash2, T_HASH)) {
-	return Qfalse;
+	if (!rb_respond_to(hash2, idTo_hash)) {
+	    return Qfalse;
+	}
+        else {
+	    return rb_funcall(hash2, idEqq, 1, hash1);
+        }
     }
-
-    if (RHASH_EMPTY_P(hash1)) {
+    if (RHASH_EMPTY_P(hash1))
 	return RHASH_EMPTY_P(hash2) ? Qtrue : Qfalse;
-    }
+    if (RHASH_SIZE(hash1) > RHASH_SIZE(hash2))
+	return Qfalse;
+    if (!RHASH(hash1)->ntbl || !RHASH(hash2)->ntbl)
+        return Qtrue;
+    if (RHASH(hash1)->ntbl->type != RHASH(hash2)->ntbl->type)
+	return Qfalse;
 
-    rb_hash_foreach(hash1, eqq_i, (VALUE)args);
-    return args[1];
+    data.tbl = RHASH(hash2)->ntbl;
+    return rb_exec_recursive_paired(recursive_eqq, hash1, hash2, (VALUE)&data);
 }
 
 static int
