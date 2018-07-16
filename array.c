@@ -3957,6 +3957,54 @@ rb_ary_eql(VALUE ary1, VALUE ary2)
     return rb_exec_recursive_paired(recursive_eql, ary1, ary2, ary2);
 }
 
+static VALUE
+recursive_eqq(VALUE ary1, VALUE ary2, int recur)
+{
+    long i, len1;
+    const VALUE *p1, *p2;
+
+    if (recur) return Qtrue; /* Subtle! */
+
+    p1 = RARRAY_CONST_PTR(ary1);
+    p2 = RARRAY_CONST_PTR(ary2);
+    len1 = RARRAY_LEN(ary1);
+
+    for (i = 0; i < len1; i++) {
+	if (*p1 != *p2) {
+	    if (rb_funcall(*p1, idEqq, 1, *p2)) {
+		len1 = RARRAY_LEN(ary1);
+		if (len1 != RARRAY_LEN(ary2))
+		    return Qfalse;
+		if (len1 < i)
+		    return Qtrue;
+		p1 = RARRAY_CONST_PTR(ary1) + i;
+		p2 = RARRAY_CONST_PTR(ary2) + i;
+	    }
+	    else {
+		return Qfalse;
+	    }
+	}
+	p1++;
+	p2++;
+    }
+    return Qtrue;
+}
+
+static VALUE
+rb_ary_eqq(VALUE ary1, VALUE ary2)
+{
+    if (ary1 == ary2) return Qtrue;
+    if (!RB_TYPE_P(ary2, T_ARRAY)) {
+	return Qfalse;
+    }
+    if (rb_ary_empty_p(ary1)) return rb_ary_empty_p(ary2) ? Qtrue : Qfalse;
+    if (RARRAY_LEN(ary1) != RARRAY_LEN(ary2)) return Qfalse;
+    if (RARRAY_CONST_PTR(ary1) == RARRAY_CONST_PTR(ary2)) return Qtrue;
+    return rb_exec_recursive_paired(recursive_eqq, ary1, ary2, ary2);
+}
+
+
+
 /*
  *  call-seq:
  *     ary.hash   -> integer
@@ -6272,6 +6320,7 @@ Init_Array(void)
     rb_define_method(rb_cArray, "to_ary", rb_ary_to_ary_m, 0);
 
     rb_define_method(rb_cArray, "==", rb_ary_equal, 1);
+    rb_define_method(rb_cArray, "===", rb_ary_eqq, 1);
     rb_define_method(rb_cArray, "eql?", rb_ary_eql, 1);
     rb_define_method(rb_cArray, "hash", rb_ary_hash, 0);
 

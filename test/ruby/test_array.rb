@@ -2389,6 +2389,23 @@ class TestArray < Test::Unit::TestCase
     assert_not_equal([0, 1, 2], [0, 1, 3])
   end
 
+  def test_eqq
+    o = Object.new
+    def o.==(x); false; end
+    def o.===(x); true; end
+    assert_operator([o, o, o], :===, [0, 1, 2])
+    assert_operator([0, 1, 2], :===, [0, 1, 2])
+    assert_operator([], :===, [])
+
+    assert_not_operator([o, o], :===, [0, 1, 2])
+    assert_not_operator([o, o, o], :===, [0, 1])
+    assert_not_operator([0, 1, 2], :===, [o, o, o])
+    assert_not_operator([1], :===, [])
+    assert_not_operator([], :===, [1])
+    assert_not_operator([0, 1, 2], :===, 42)
+    assert_not_operator([], :===, 42)
+  end
+
   A = Array.new(3, &:to_s)
   B = A.dup
 
