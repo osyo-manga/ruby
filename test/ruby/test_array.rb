@@ -2396,6 +2396,12 @@ class TestArray < Test::Unit::TestCase
     assert_operator([o, o, o], :===, [0, 1, 2])
     assert_operator([0, 1, 2], :===, [0, 1, 2])
     assert_operator([], :===, [])
+    a = [1, 2, 3]
+    a[0] = a
+    assert_operator(a, :===, a)
+    b = [1, 2, 3]
+    b[0] = b
+    assert_operator(a, :===, b)
 
     assert_not_operator([o, o], :===, [0, 1, 2])
     assert_not_operator([o, o, o], :===, [0, 1])
@@ -2404,6 +2410,10 @@ class TestArray < Test::Unit::TestCase
     assert_not_operator([], :===, [1])
     assert_not_operator([0, 1, 2], :===, 42)
     assert_not_operator([], :===, 42)
+
+    c = [1, 3, 2]
+    c[0] = c
+    assert_not_operator(a, :===, c)
   end
 
   A = Array.new(3, &:to_s)
