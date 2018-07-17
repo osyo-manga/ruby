@@ -3990,7 +3990,6 @@ recursive_eqq(VALUE ary1, VALUE ary2, int recur)
     return Qtrue;
 }
 
-
 /*
  *  call-seq:
  *     ary == other_ary   ->   bool
