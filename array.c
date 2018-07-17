@@ -3990,6 +3990,21 @@ recursive_eqq(VALUE ary1, VALUE ary2, int recur)
     return Qtrue;
 }
 
+
+/*
+ *  call-seq:
+ *     ary == other_ary   ->   bool
+ *
+ *  Equality(===) --- Two arrays are equal if they contain the same number of
+ *  elements and if each element is equal to (according to Object#==) the
+ *  corresponding element in +other_ary+.
+ *
+ *     [ String, /\w/ ]          === [ "a", "c", 7 ]   # => false
+ *     [ String, /\w/, (1..10) ] === [ "a", "c", 7 ]   # => true
+ *     [ String, /\w/, (1..10) ] === [ "a", "!", 42 ]  # => false
+ *
+ */
+
 static VALUE
 rb_ary_eqq(VALUE ary1, VALUE ary2)
 {
@@ -4002,8 +4017,6 @@ rb_ary_eqq(VALUE ary1, VALUE ary2)
     if (RARRAY_CONST_PTR(ary1) == RARRAY_CONST_PTR(ary2)) return Qtrue;
     return rb_exec_recursive_paired(recursive_eqq, ary1, ary2, ary2);
 }
-
-
 
 /*
  *  call-seq:
