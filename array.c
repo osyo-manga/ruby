@@ -4009,10 +4009,7 @@ static VALUE
 rb_ary_eqq(VALUE ary1, VALUE ary2)
 {
     if (ary1 == ary2) return Qtrue;
-    if (!RB_TYPE_P(ary2, T_ARRAY)) {
-	return Qfalse;
-    }
-    if (rb_ary_empty_p(ary1)) return rb_ary_empty_p(ary2) ? Qtrue : Qfalse;
+    if (!RB_TYPE_P(ary2, T_ARRAY)) return Qfalse;
     if (RARRAY_LEN(ary1) != RARRAY_LEN(ary2)) return Qfalse;
     if (RARRAY_CONST_PTR(ary1) == RARRAY_CONST_PTR(ary2)) return Qtrue;
     return rb_exec_recursive_paired(recursive_eqq, ary1, ary2, ary2);
