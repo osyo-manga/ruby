@@ -1731,11 +1731,15 @@ rb_hash_replace(VALUE hash, VALUE hash2)
  *     hsh.size      ->  integer
  *
  *  Returns the number of key-value pairs in the hash.
+ *  <code>Hash#length</code> and <code>Hash#size</code> are both equivalent to
+ *  each other.
  *
  *     h = { "d" => 100, "a" => 200, "v" => 300, "e" => 400 }
  *     h.length        #=> 4
+ *     h.size          #=> 4
  *     h.delete("a")   #=> 200
  *     h.length        #=> 3
+ *     h.size          #=> 3
  */
 
 VALUE
@@ -3315,6 +3319,9 @@ env_str_new2(const char *ptr)
 
 static int env_path_tainted(const char *);
 
+static const char TZ_ENV[] = "TZ";
+extern bool ruby_tz_uptodate_p;
+
 static rb_encoding *
 env_encoding_for(const char *name, const char *ptr)
 {
@@ -3395,6 +3402,9 @@ env_delete(VALUE obj, VALUE name)
 	if (ENVMATCH(nam, PATH_ENV)) {
 	    RB_GC_GUARD(name);
 	    path_tainted = 0;
+	}
+	else if (ENVMATCH(nam, TZ_ENV)) {
+	    ruby_tz_uptodate_p = FALSE;
 	}
 	return value;
     }
@@ -3754,6 +3764,9 @@ env_aset(VALUE obj, VALUE nm, VALUE val)
 	else {
 	    path_tainted_p(value);
 	}
+    }
+    else if (ENVMATCH(name, TZ_ENV)) {
+	ruby_tz_uptodate_p = FALSE;
     }
     return val;
 }

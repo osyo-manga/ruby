@@ -737,6 +737,8 @@ queue_closed_result(VALUE self, struct rb_queue *q)
  *	  end
  *	end
  *
+ *	consumer.join
+ *
  */
 
 /*
@@ -1423,7 +1425,7 @@ static VALUE
 undumpable(VALUE obj)
 {
     rb_raise(rb_eTypeError, "can't dump %"PRIsVALUE, rb_obj_class(obj));
-    UNREACHABLE;
+    UNREACHABLE_RETURN(Qnil);
 }
 
 static VALUE

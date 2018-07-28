@@ -295,7 +295,7 @@ assert_close_on_exec(int fd)
     int flags = fcntl(fd, F_GETFD);
     if (flags == -1) {
         static const char m[] = "reserved FD closed unexpectedly?\n";
-        (void)write(2, m, sizeof(m) - 1);
+        (void)!write(2, m, sizeof(m) - 1);
         return;
     }
     if (flags & FD_CLOEXEC) return;
@@ -1477,6 +1477,7 @@ after_exec(void)
     after_exec_non_async_signal_safe();
 }
 
+#if defined HAVE_WORKING_FORK || defined HAVE_DAEMON
 #define before_fork_ruby() before_exec()
 static void
 after_fork_ruby(void)
@@ -1484,6 +1485,7 @@ after_fork_ruby(void)
     rb_threadptr_pending_interrupt_clear(GET_THREAD());
     after_exec();
 }
+#endif
 
 #include "dln.h"
 
@@ -2896,7 +2898,7 @@ rb_f_exec(int argc, const VALUE *argv)
     rb_exec_fail(eargp, err, errmsg);
     RB_GC_GUARD(execarg_obj);
     rb_syserr_fail_str(err, fail_str);
-    UNREACHABLE;
+    UNREACHABLE_RETURN(Qnil);
 }
 
 #define ERRMSG(str) do { if (errmsg && 0 < errmsg_buflen) strlcpy(errmsg, (str), errmsg_buflen); } while (0)
@@ -3867,6 +3869,10 @@ retry_fork_async_signal_safe(int *status, int *ep,
     while (1) {
         prefork();
         disable_child_handler_before_fork(&old);
+#ifdef __GNUC__
+# pragma GCC diagnostic push
+# pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+#endif
 #ifdef HAVE_WORKING_VFORK
         if (!has_privilege())
             pid = vfork();
@@ -3874,6 +3880,9 @@ retry_fork_async_signal_safe(int *status, int *ep,
             pid = fork();
 #else
         pid = fork();
+#endif
+#ifdef __GNUC__
+# pragma GCC diagnostic pop
 #endif
         if (pid == 0) {/* fork succeed, child process */
             int ret;
@@ -3943,7 +3952,14 @@ rb_fork_ruby(int *status)
 	prefork();
 	disable_child_handler_before_fork(&old);
 	before_fork_ruby();
+#ifdef __GNUC__
+# pragma GCC diagnostic push
+# pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+#endif
 	pid = fork();
+#ifdef __GNUC__
+# pragma GCC diagnostic pop
+#endif
 	err = errno;
 	after_fork_ruby();
 	disable_child_handler_fork_parent(&old); /* yes, bad name */
@@ -4058,7 +4074,7 @@ rb_f_exit_bang(int argc, VALUE *argv, VALUE obj)
     }
     _exit(istatus);
 
-    UNREACHABLE;
+    UNREACHABLE_RETURN(Qnil);
 }
 
 void
@@ -4129,7 +4145,7 @@ rb_f_exit(int argc, const VALUE *argv)
     }
     rb_exit(istatus);
 
-    UNREACHABLE;
+    UNREACHABLE_RETURN(Qnil);
 }
 
 
@@ -4166,7 +4182,7 @@ rb_f_abort(int argc, const VALUE *argv)
 	rb_exc_raise(rb_class_new_instance(2, args, rb_eSystemExit));
     }
 
-    UNREACHABLE;
+    UNREACHABLE_RETURN(Qnil);
 }
 
 void
@@ -5154,7 +5170,7 @@ rlimit_resource_type(VALUE rtype)
 
     rb_raise(rb_eArgError, "invalid resource name: % "PRIsVALUE, rtype);
 
-    UNREACHABLE;
+    UNREACHABLE_RETURN(-1);
 }
 
 static rlim_t
@@ -5195,7 +5211,7 @@ rlimit_resource_value(VALUE rval)
 #endif
     rb_raise(rb_eArgError, "invalid resource value: %"PRIsVALUE, rval);
 
-    UNREACHABLE;
+    UNREACHABLE_RETURN((rlim_t)-1);
 }
 #endif
 
@@ -7034,7 +7050,7 @@ p_uid_switch(VALUE obj)
 	rb_syserr_fail(EPERM, 0);
     }
 
-    UNREACHABLE;
+    UNREACHABLE_RETURN(Qnil);
 }
 #else
 static VALUE
@@ -7147,7 +7163,7 @@ p_gid_switch(VALUE obj)
 	rb_syserr_fail(EPERM, 0);
     }
 
-    UNREACHABLE;
+    UNREACHABLE_RETURN(Qnil);
 }
 #else
 static VALUE

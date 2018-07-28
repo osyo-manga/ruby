@@ -29,6 +29,12 @@
 # * https://github.com/ruby/rss
 # * https://github.com/ruby/irb
 # * https://github.com/ruby/sync
+# * https://github.com/ruby/tracer
+# * https://github.com/ruby/shell
+# * https://github.com/ruby/forwardable
+# * https://github.com/ruby/thwait
+# * https://github.com/ruby/e2mmap
+# * https://github.com/ruby/mutex_m
 #
 
 $repositories = {
@@ -60,7 +66,13 @@ $repositories = {
   rexml: 'ruby/rexml',
   rss: 'ruby/rss',
   irb: 'ruby/irb',
-  sync: 'ruby/sync'
+  sync: 'ruby/sync',
+  tracer: 'ruby/tracer',
+  shell: 'ruby/shell',
+  forwardable: "ruby/forwardable",
+  thwait: "ruby/thwait",
+  e2mmap: "ruby/e2mmap",
+  mutex_m: "ruby/mutex_m"
 }
 
 def sync_default_gems(gem)
@@ -103,11 +115,6 @@ def sync_default_gems(gem)
     `rm -f ext/psych/yaml/LICENSE`
     `cp ../psych/psych.gemspec ext/psych/`
     `git checkout ext/psych/depend`
-  when "fileutils"
-    `rm -rf lib/fileutils.rb test/fileutils lib/fileutils.gemspec`
-    `cp -rf ../fileutils/lib/* lib`
-    `cp -rf ../fileutils/test/fileutils test`
-    `cp -f ../fileutils/fileutils.gemspec lib`
   when "fiddle"
     `rm -rf ext/fiddle test/fiddle`
     `cp -rf ../fiddle/ext/fiddle ext`
@@ -129,12 +136,6 @@ def sync_default_gems(gem)
     `cp -rf ../io-console/lib/console ext/io/console/lib`
     `cp -f ../io-console/io-console.gemspec ext/io/console`
     `git checkout ext/io/console/depend`
-  when "webrick"
-    `rm -rf lib/webrick* test/webrick`
-    `cp -rf ../webrick/lib/webrick* lib`
-    `cp -rf ../webrick/test/webrick test`
-    `cp -f ../webrick/webrick.gemspec lib/webrick`
-    `git checkout lib/webrick/.document`
   when "dbm"
     `rm -rf ext/dbm test/dbm`
     `cp -rf ../dbm/ext/dbm ext`
@@ -177,16 +178,14 @@ def sync_default_gems(gem)
     `cp -rf ../fcntl/ext/fcntl ext`
     `cp -f ../fcntl/fcntl.gemspec ext/fcntl`
     `git checkout ext/fcntl/depend`
-  when "scanf"
-    `rm -rf lib/scanf.rb test/scanf`
-    `cp -rf ../scanf/lib/* lib`
-    `cp -rf ../scanf/test/scanf test`
-    `cp -f ../scanf/scanf.gemspec lib`
-  when "cmath"
-    `rm -rf lib/cmath.rb test/test_cmath.rb`
-    `cp -rf ../cmath/lib/* lib`
-    `cp -rf ../cmath/test/test_cmath.rb test`
-    `cp -f ../cmath/cmath.gemspec lib`
+  when "thwait"
+    `rm -rf lib/thwait*`
+    `cp -rf ../thwait/lib/* lib`
+    `cp -rf ../thwait/thwait.gemspec lib`
+  when "e2mmap"
+    `rm -rf lib/e2mmap*`
+    `cp -rf ../e2mmap/lib/* lib`
+    `cp -rf ../e2mmap/e2mmap.gemspec lib`
   when "strscan"
     `rm -rf ext/strscan test/strscan`
     `cp -rf ../strscan/ext/strscan ext`
@@ -194,42 +193,32 @@ def sync_default_gems(gem)
     `cp -f ../strscan/strscan.gemspec ext/strscan`
     `rm -f ext/strscan/regenc.h ext/strscan/regint.h`
     `git checkout ext/strscan/depend`
-  when "ipaddr"
-    `rm -rf lib/ipaddr.rb test/test_ipaddr.rb`
-    `cp -rf ../ipaddr/lib/* lib`
-    `cp -rf ../ipaddr/test/test_ipaddr.rb test`
-    `cp -f ../ipaddr/ipaddr.gemspec lib`
-  when "logger"
-    `rm -rf lib/logger.rb test/logger`
-    `cp -rf ../logger/lib/* lib`
-    `cp -rf ../logger/test/logger test`
-    `cp -f ../logger/logger.gemspec lib`
-  when "prime"
-    `rm -rf lib/prime.rb test/test_prime.rb`
-    `cp -rf ../prime/lib/* lib`
-    `cp -rf ../prime/test/test_prime.rb test`
-    `cp -f ../prime/prime.gemspec lib`
-  when "ostruct"
-    `rm -rf lib/ostruct.rb test/ostruct`
-    `cp -rf ../ostruct/lib/* lib`
-    `cp -rf ../ostruct/test/ostruct test`
-    `cp -f ../ostruct/ostruct.gemspec lib`
   when "sync"
     `rm -rf lib/sync.rb test/thread/test_sync.rb`
     `cp -rf ../sync/lib/* lib`
     `cp -rf ../sync/test/thread test`
     `cp -f ../sync/sync.gemspec lib`
-  when "rexml", "rss", "matrix", "irb", "csv"
+  when "rexml", "rss", "matrix", "irb", "csv", "shell", "logger", "ostruct", "scanf", "webrick", "fileutils", "forwardable", "prime", "tracer", "ipaddr", "cmath", "mutex_m"
     sync_lib gem
   else
   end
 end
 
 def sync_lib(repo)
-  `rm -rf lib/#{repo}* test/#{repo}`
+  `rm -rf lib/#{repo}.rb lib/#{repo}/* test/test_#{repo}.rb test/#{repo}`
   `cp -rf ../#{repo}/lib/* lib`
-  `cp -rf ../#{repo}/test/#{repo} test`
-  `cp -f ../#{repo}/#{repo}.gemspec lib/#{repo}`
+  tests = if File.directory?("test/#{repo}")
+            "test/#{repo}"
+          else
+            "test/test_#{repo}.rb"
+          end
+  `cp -rf ../#{repo}/#{tests} test`
+  gemspec = if File.directory?("lib/#{repo}")
+              "lib/#{repo}/#{repo}.gemspec"
+            else
+              "lib/#{repo}.gemspec"
+            end
+  `cp -f ../#{repo}/#{repo}.gemspec #{gemspec}`
 end
 
 if ARGV[0]

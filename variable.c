@@ -1734,7 +1734,7 @@ rb_obj_remove_instance_variable(VALUE obj, VALUE name)
   not_defined:
     rb_name_err_raise("instance variable %1$s not defined",
 		      obj, name);
-    UNREACHABLE;
+    UNREACHABLE_RETURN(Qnil);
 }
 
 NORETURN(static void uninitialized_constant(VALUE, VALUE));
@@ -1805,7 +1805,7 @@ rb_mod_const_missing(VALUE klass, VALUE name)
     }
     uninitialized_constant(klass, name);
 
-    UNREACHABLE;
+    UNREACHABLE_RETURN(Qnil);
 }
 
 static void
@@ -2848,7 +2848,7 @@ set_const_visibility(VALUE mod, int argc, const VALUE *argv,
     rb_const_entry_t *ce;
     ID id;
 
-    rb_frozen_class_p(mod);
+    rb_class_modify_check(mod);
     if (argc == 0) {
 	rb_warning("%"PRIsVALUE" with no argument is just ignored",
 		   QUOTE_ID(rb_frame_callee()));
@@ -2898,7 +2898,7 @@ rb_deprecate_constant(VALUE mod, const char *name)
     ID id;
     long len = strlen(name);
 
-    rb_frozen_class_p(mod);
+    rb_class_modify_check(mod);
     if (!(id = rb_check_id_cstr(name, len, NULL)) ||
 	!(ce = rb_const_lookup(mod, id))) {
 	rb_name_err_raise("constant %2$s::%1$s not defined",

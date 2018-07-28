@@ -19,15 +19,18 @@ enum rb_mjit_iseq_func {
     /* ISEQ is already queued for the machine code generation but the
        code is not ready yet for the execution */
     NOT_READY_JIT_ISEQ_FUNC = 1,
-    /* ISEQ included not compilable insn or some assertion failed  */
-    NOT_COMPILABLE_JIT_ISEQ_FUNC = 2,
+    /* ISEQ included not compilable insn, some internal assertion failed
+       or the unit is unloaded */
+    NOT_COMPILED_JIT_ISEQ_FUNC = 2,
     /* End mark */
     LAST_JIT_ISEQ_FUNC = 3
 };
 
 /* MJIT options which can be defined on the MRI command line.  */
 struct mjit_options {
-    char on; /* flag of MJIT usage  */
+    /* Converted from "jit" feature flag to tell the enablement
+       information to ruby_show_version().  */
+    char on;
     /* Save temporary files after MRI finish.  The temporary files
        include the pre-compiled header, C code file generated for ISEQ,
        and the corresponding object file.  */
@@ -114,7 +117,7 @@ mjit_exec(rb_execution_context_t *ec)
             }
             return Qundef;
           case NOT_READY_JIT_ISEQ_FUNC:
-          case NOT_COMPILABLE_JIT_ISEQ_FUNC:
+          case NOT_COMPILED_JIT_ISEQ_FUNC:
             return Qundef;
           default: /* to avoid warning with LAST_JIT_ISEQ_FUNC */
             break;

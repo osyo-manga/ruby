@@ -117,7 +117,11 @@ class TestRubyOptions < Test::Unit::TestCase
   def test_verbose
     assert_in_out_err(["-vve", ""]) do |r, e|
       assert_match(VERSION_PATTERN, r[0])
-      assert_equal(RUBY_DESCRIPTION, r[0])
+      if RubyVM::MJIT.enabled? && !mjit_force_enabled?
+        assert_equal(NO_JIT_DESCRIPTION, r[0])
+      else
+        assert_equal(RUBY_DESCRIPTION, r[0])
+      end
       assert_equal([], e)
     end
 
@@ -134,9 +138,11 @@ class TestRubyOptions < Test::Unit::TestCase
   end
 
   def test_enable
-    assert_in_out_err(%w(--enable all -e) + [""], "", [], [])
-    assert_in_out_err(%w(--enable-all -e) + [""], "", [], [])
-    assert_in_out_err(%w(--enable=all -e) + [""], "", [], [])
+    if JITSupport.supported?
+      assert_in_out_err(%w(--enable all -e) + [""], "", [], [])
+      assert_in_out_err(%w(--enable-all -e) + [""], "", [], [])
+      assert_in_out_err(%w(--enable=all -e) + [""], "", [], [])
+    end
     assert_in_out_err(%w(--enable foobarbazqux -e) + [""], "", [],
                       /unknown argument for --enable: `foobarbazqux'/)
     assert_in_out_err(%w(--enable), "", [], /missing argument for --enable/)
@@ -181,15 +187,34 @@ class TestRubyOptions < Test::Unit::TestCase
       end
       assert_equal([], e)
     end
-    if JITSupport.supported?
-      assert_in_out_err(%w(--version --jit)) do |r, e|
-        assert_match(VERSION_PATTERN_WITH_JIT, r[0])
-        if RubyVM::MJIT.enabled?
-          assert_equal(RUBY_DESCRIPTION, r[0])
-        else
-          assert_equal(EnvUtil.invoke_ruby(['--jit', '-e', 'print RUBY_DESCRIPTION'], '', true).first, r[0])
-        end
+
+    [
+      %w(--version --jit --disable=jit),
+      %w(--version --enable=jit --disable=jit),
+      %w(--version --enable-jit --disable-jit),
+    ].each do |args|
+      assert_in_out_err(args) do |r, e|
+        assert_match(VERSION_PATTERN, r[0])
+        assert_match(NO_JIT_DESCRIPTION, r[0])
         assert_equal([], e)
+      end
+    end
+
+    if JITSupport.supported?
+      [
+        %w(--version --jit),
+        %w(--version --enable=jit),
+        %w(--version --enable-jit),
+      ].each do |args|
+        assert_in_out_err(args) do |r, e|
+          assert_match(VERSION_PATTERN_WITH_JIT, r[0])
+          if RubyVM::MJIT.enabled?
+            assert_equal(RUBY_DESCRIPTION, r[0])
+          else
+            assert_equal(EnvUtil.invoke_ruby(['--jit', '-e', 'print RUBY_DESCRIPTION'], '', true).first, r[0])
+          end
+          assert_equal([], e)
+        end
       end
     end
   end
@@ -1041,5 +1066,18 @@ class TestRubyOptions < Test::Unit::TestCase
   def test_null_script
     skip "#{IO::NULL} is not a character device" unless File.chardev?(IO::NULL)
     assert_in_out_err([IO::NULL], success: true)
+  end
+
+  def test_argv_tainted
+    assert_separately(%w[- arg], "#{<<~"begin;"}\n#{<<~'end;'}")
+    begin;
+      assert_predicate(ARGV[0], :tainted?, '[ruby-dev:50596] [Bug #14941]')
+    end;
+  end
+
+  private
+
+  def mjit_force_enabled?
+    "#{RbConfig::CONFIG['CFLAGS']} #{RbConfig::CONFIG['CPPFLAGS']}".match?(/(\A|\s)-D ?MJIT_FORCE_ENABLE\b/)
   end
 end

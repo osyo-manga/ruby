@@ -43,11 +43,11 @@ GEM_VENDOR =
 
 BENCHMARK_DRIVER_GIT_URL = https://github.com/benchmark-driver/benchmark-driver
 BENCHMARK_DRIVER_GIT_REF = v0.14.6
-SIMPLECOV_GIT_URL = git://github.com/colszowka/simplecov.git
+SIMPLECOV_GIT_URL = https://github.com/colszowka/simplecov.git
 SIMPLECOV_GIT_REF = v0.15.0
-SIMPLECOV_HTML_GIT_URL = git://github.com/colszowka/simplecov-html.git
+SIMPLECOV_HTML_GIT_URL = https://github.com/colszowka/simplecov-html.git
 SIMPLECOV_HTML_GIT_REF = v0.10.2
-DOCLIE_GIT_URL = git://github.com/ms-ati/docile.git
+DOCLIE_GIT_URL = https://github.com/ms-ati/docile.git
 DOCLIE_GIT_REF = v1.1.5
 
 STATIC_RUBY   = static-ruby
@@ -834,7 +834,8 @@ $(PLATFORM_D):
 	@exit > $@
 
 exe/$(PROGRAM): ruby-runner.c ruby-runner.h exe/.time miniruby$(EXEEXT)
-	$(Q) $(PURIFY) $(CC) $(CFLAGS) $(CPPFLAGS) -DRUBY_INSTALL_NAME=$(@F) $(LDFLAGS) $(OUTFLAG)$@ $< $(LIBS)
+	$(Q) $(CC) $(CFLAGS) $(CPPFLAGS) -DRUBY_INSTALL_NAME=$(@F) $(COUTFLAG)ruby-runner.$(OBJEXT) -c $(CSRCFLAG)$(srcdir)/ruby-runner.c
+	$(Q) $(PURIFY) $(CC) $(CFLAGS) $(CPPFLAGS) $(LDFLAGS) $(OUTFLAG)$@ ruby-runner.$(OBJEXT) $(LIBS)
 	$(Q) $(POSTLINK)
 	$(Q) ./miniruby$(EXEEXT) \
 	    -e 'prog, dest = ARGV; dest += "/ruby"' \

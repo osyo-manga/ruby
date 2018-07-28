@@ -162,6 +162,10 @@ struct rb_mjit_unit {
     /* Dlopen handle of the loaded object file.  */
     void *handle;
     const rb_iseq_t *iseq;
+#ifndef _MSC_VER
+    /* This is lazily deleted so that it can be used again to create a large so file. */
+    char *o_file;
+#endif
 #ifdef _WIN32
     /* DLL cannot be removed while loaded on Windows */
     char *so_file;
@@ -327,14 +331,18 @@ form_args(int num, ...)
     va_list argp;
     size_t len, n;
     int i;
-    char **args, **res;
+    char **args, **res, **tmp;
 
     va_start(argp, num);
     res = NULL;
     for (i = len = 0; i < num; i++) {
         args = va_arg(argp, char **);
         n = args_len(args);
-        REALLOC_N(res, char *, len + n + 1);
+        if ((tmp = (char **)realloc(res, sizeof(char *) * (len + n + 1))) == NULL) {
+            free(res);
+            return NULL;
+        }
+        res = tmp;
         MEMCPY(res + len, args, char *, n + 1);
         len += n;
     }
@@ -377,7 +385,14 @@ start_process(const char *path, char *const *argv)
         }
         dev_null = rb_cloexec_open(ruby_null_device, O_WRONLY, 0);
 
+#ifdef __GNUC__
+# pragma GCC diagnostic push
+# pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+#endif
         if ((pid = vfork()) == 0) {
+#ifdef __GNUC__
+# pragma GCC diagnostic pop
+#endif
             umask(0077);
             if (mjit_opts.verbose == 0) {
                 /* CC can be started in a thread using a file which has been
@@ -511,12 +526,24 @@ mjit_free_iseq(const rb_iseq_t *iseq)
     CRITICAL_SECTION_FINISH(4, "mjit_free_iseq");
 }
 
+/* Lazily delete .o and/or .so files. */
 static void
-clean_so_file(struct rb_mjit_unit *unit)
+clean_object_files(struct rb_mjit_unit *unit)
 {
+#ifndef _MSC_VER
+    if (unit->o_file) {
+        char *o_file = unit->o_file;
+
+        unit->o_file = NULL;
+        remove_file(o_file);
+        free(o_file);
+    }
+#endif
+
 #ifdef _WIN32
-    char *so_file = unit->so_file;
-    if (so_file) {
+    if (unit->so_file) {
+        char *so_file = unit->so_file;
+
         unit->so_file = NULL;
         remove_file(so_file);
         free(so_file);
@@ -524,14 +551,24 @@ clean_so_file(struct rb_mjit_unit *unit)
 #endif
 }
 
+/* This is called in the following situations:
+   1) On dequeue or `unload_units()`, associated ISeq is already GCed.
+   2) The unit is not called often and unloaded by `unload_units()`.
+   3) Freeing lists on `mjit_finish()`.
+
+   `jit_func` value does not matter for 1 and 3 since the unit won't be used anymore.
+   For the situation 2, this sets the ISeq's JIT state to NOT_COMPILED_JIT_ISEQ_FUNC
+   to prevent the situation that the same methods are continously compiled.  */
 static void
 free_unit(struct rb_mjit_unit *unit)
 {
-    if (unit->iseq) /* ISeq is not GCed */
-        unit->iseq->body->jit_func = 0;
+    if (unit->iseq) { /* ISeq is not GCed */
+        unit->iseq->body->jit_func = (mjit_func_t)NOT_COMPILED_JIT_ISEQ_FUNC;
+        unit->iseq->body->jit_unit = NULL;
+    }
     if (unit->handle) /* handle is NULL if it's in queue */
         dlclose(unit->handle);
-    clean_so_file(unit);
+    clean_object_files(unit);
     xfree(unit);
 }
 
@@ -717,7 +754,7 @@ make_pch(void)
     }
 
     exit_code = exec_process(cc_path, args);
-    xfree(args);
+    free(args);
 #endif
 
     CRITICAL_SECTION_START(3, "in make_pch");
@@ -737,62 +774,103 @@ make_pch(void)
 #define append_str(p, str) append_str2(p, str, sizeof(str)-1)
 #define append_lit(p, str) append_str2(p, str, rb_strlen_lit(str))
 
-/* Compile C file to so. It returns 1 if it succeeds. */
+#ifdef _MSC_VER
+
+/* Compile C file to so. It returns 1 if it succeeds. (mswin) */
 static int
 compile_c_to_so(const char *c_file, const char *so_file)
 {
     int exit_code;
-    const char *files[] = {
-#ifndef _MSC_VER
-        "-o",
-#endif
-        NULL, NULL,
-#ifdef __clang__
-        "-include-pch", NULL,
-#endif
-#ifdef _WIN32
-# ifdef _MSC_VER
-        "-link",
-# endif
-        libruby_pathflag,
-#endif
-        NULL,
-    };
+    const char *files[] = { NULL, NULL, "-link", libruby_pathflag, NULL };
     char **args;
-#ifdef _MSC_VER
     char *p;
     int solen;
-#endif
 
-#ifdef _MSC_VER
     solen = strlen(so_file);
-    files[0] = p = xmalloc(rb_strlen_lit("-Fe") + solen + 1);
+    files[0] = p = (char *)malloc(sizeof(char) * (rb_strlen_lit("-Fe") + solen + 1));
+    if (p == NULL)
+        return FALSE;
     p = append_lit(p, "-Fe");
     p = append_str2(p, so_file, solen);
     *p = '\0';
     files[1] = c_file;
-#else
-# ifdef __clang__
-    files[4] = pch_file;
-# endif
-    files[2] = c_file;
-    files[1] = so_file;
-#endif
     args = form_args(5, CC_LDSHARED_ARGS, CC_CODEFLAG_ARGS,
                      files, CC_LIBS, CC_DLDFLAGS_ARGS);
     if (args == NULL)
         return FALSE;
 
     exit_code = exec_process(cc_path, args);
-    xfree(args);
-#ifdef _MSC_VER
-    xfree((char *)files[0]);
-#endif
+    free(args);
+    free((char *)files[0]);
 
     if (exit_code != 0)
         verbose(2, "compile_c_to_so: compile error: %d", exit_code);
     return exit_code == 0;
 }
+
+#else
+
+/* Compile .c file to .o file. It returns 1 if it succeeds. (non-mswin) */
+static int
+compile_c_to_o(const char *c_file, const char *o_file)
+{
+    int exit_code;
+    const char *files[] = {
+        "-o", NULL, NULL,
+# ifdef __clang__
+        "-include-pch", NULL,
+# endif
+        "-c", NULL
+    };
+    char **args;
+
+    files[1] = o_file;
+    files[2] = c_file;
+# ifdef __clang__
+    files[4] = pch_file;
+# endif
+    args = form_args(5, CC_COMMON_ARGS, CC_CODEFLAG_ARGS, files, CC_LIBS, CC_DLDFLAGS_ARGS);
+    if (args == NULL)
+        return FALSE;
+
+    exit_code = exec_process(cc_path, args);
+    free(args);
+
+    if (exit_code != 0)
+        verbose(2, "compile_c_to_o: compile error: %d", exit_code);
+    return exit_code == 0;
+}
+
+/* Link .o file to .so file. It returns 1 if it succeeds. (non-mswin) */
+static int
+link_o_to_so(const char *o_file, const char *so_file)
+{
+    int exit_code;
+    const char *files[] = {
+        "-o", NULL, NULL,
+# ifdef _WIN32
+        libruby_pathflag,
+# endif
+        NULL
+    };
+    char **args;
+
+    files[1] = so_file;
+    files[2] = o_file;
+    args = form_args(5, CC_LDSHARED_ARGS, CC_CODEFLAG_ARGS,
+                     files, CC_LIBS, CC_DLDFLAGS_ARGS);
+    if (args == NULL)
+        return FALSE;
+
+    exit_code = exec_process(cc_path, args);
+    free(args);
+
+    if (exit_code != 0)
+        verbose(2, "link_o_to_so: link error: %d", exit_code);
+    return exit_code == 0;
+}
+
+#endif
 
 static void *
 load_func_from_so(const char *so_file, const char *funcname, struct rb_mjit_unit *unit)
@@ -848,7 +926,7 @@ remove_file(const char *filename)
 }
 
 /* Compile ISeq in UNIT and return function pointer of JIT-ed code.
-   It may return NOT_COMPILABLE_JIT_ISEQ_FUNC if something went wrong. */
+   It may return NOT_COMPILED_JIT_ISEQ_FUNC if something went wrong. */
 static mjit_func_t
 convert_unit_to_func(struct rb_mjit_unit *unit)
 {
@@ -866,6 +944,10 @@ convert_unit_to_func(struct rb_mjit_unit *unit)
         O_BINARY|
 #endif
         O_WRONLY|O_EXCL|O_CREAT;
+#ifndef _MSC_VER
+    static const char o_ext[] = ".o";
+    char *o_file;
+#endif
 
     c_file_len = sprint_uniq_filename(c_file_buff, c_file_len, unit->id, MJIT_TMP_PREFIX, c_ext);
     if (c_file_len >= (int)sizeof(c_file_buff)) {
@@ -874,9 +956,16 @@ convert_unit_to_func(struct rb_mjit_unit *unit)
         c_file_len = sprint_uniq_filename(c_file, c_file_len, unit->id, MJIT_TMP_PREFIX, c_ext);
     }
     ++c_file_len;
+
+#ifndef _MSC_VER
+    o_file = alloca(c_file_len - sizeof(c_ext) + sizeof(o_ext));
+    memcpy(o_file, c_file, c_file_len - sizeof(c_ext));
+    memcpy(&o_file[c_file_len - sizeof(c_ext)], o_ext, sizeof(o_ext));
+#endif
     so_file = alloca(c_file_len - sizeof(c_ext) + sizeof(so_ext));
     memcpy(so_file, c_file, c_file_len - sizeof(c_ext));
     memcpy(&so_file[c_file_len - sizeof(c_ext)], so_ext, sizeof(so_ext));
+
     sprintf(funcname, "_mjit%d", unit->id);
 
     fd = rb_cloexec_open(c_file, access_mode, 0600);
@@ -884,7 +973,7 @@ convert_unit_to_func(struct rb_mjit_unit *unit)
         int e = errno;
         if (fd >= 0) (void)close(fd);
         verbose(1, "Failed to fopen '%s', giving up JIT for it (%s)", c_file, strerror(e));
-        return (mjit_func_t)NOT_COMPILABLE_JIT_ISEQ_FUNC;
+        return (mjit_func_t)NOT_COMPILED_JIT_ISEQ_FUNC;
     }
 
 #ifdef __clang__
@@ -947,24 +1036,34 @@ convert_unit_to_func(struct rb_mjit_unit *unit)
         if (!mjit_opts.save_temps)
             remove_file(c_file);
         print_jit_result("failure", unit, 0, c_file);
-        return (mjit_func_t)NOT_COMPILABLE_JIT_ISEQ_FUNC;
+        return (mjit_func_t)NOT_COMPILED_JIT_ISEQ_FUNC;
     }
 
     start_time = real_ms_time();
+#ifdef _MSC_VER
     success = compile_c_to_so(c_file, so_file);
+#else
+    /* splitting .c -> .o step and .o -> .so step, to cache .o files in the future */
+    if (success = compile_c_to_o(c_file, o_file)) {
+        success = link_o_to_so(o_file, so_file);
+
+        if (!mjit_opts.save_temps)
+            unit->o_file = strdup(o_file); /* lazily delete on `clean_object_files()` */
+    }
+#endif
     end_time = real_ms_time();
 
     if (!mjit_opts.save_temps)
         remove_file(c_file);
     if (!success) {
         verbose(2, "Failed to generate so: %s", so_file);
-        return (mjit_func_t)NOT_COMPILABLE_JIT_ISEQ_FUNC;
+        return (mjit_func_t)NOT_COMPILED_JIT_ISEQ_FUNC;
     }
 
     func = load_func_from_so(so_file, funcname, unit);
     if (!mjit_opts.save_temps) {
 #ifdef _WIN32
-        unit->so_file = strdup(so_file);
+        unit->so_file = strdup(so_file); /* lazily delete on `clean_object_files()` */
 #else
         remove_file(so_file);
 #endif
@@ -1148,7 +1247,6 @@ unload_units(void)
     rb_vm_t *vm = GET_THREAD()->vm;
     rb_thread_t *th = NULL;
     struct rb_mjit_unit_node *node, *next, *worst_node;
-    struct rb_mjit_unit *unit;
     struct mjit_cont *cont;
     int delete_num, units_num = active_units.length;
 
@@ -1175,6 +1273,8 @@ unload_units(void)
     }
 
     /* Remove 1/10 units more to decrease unloading calls.  */
+    /* TODO: Calculate max total_calls in unit_queue and don't unload units
+       whose total_calls are larger than the max. */
     delete_num = active_units.length / 10;
     for (; active_units.length > mjit_opts.max_cache_size - delete_num;) {
         /* Find one unit that has the minimum total_calls. */
@@ -1192,14 +1292,9 @@ unload_units(void)
 
         /* Unload the worst node. */
         verbose(2, "Unloading unit %d (calls=%lu)", worst_node->unit->id, worst_node->unit->iseq->body->total_calls);
-        unit = worst_node->unit;
-        unit->iseq->body->jit_func = (mjit_func_t)NOT_READY_JIT_ISEQ_FUNC;
+        assert(worst_node->unit->handle != NULL);
+        free_unit(worst_node->unit);
         remove_from_list(worst_node, &active_units);
-
-        assert(unit->handle != NULL);
-        dlclose(unit->handle);
-        unit->handle = NULL;
-        clean_so_file(unit);
     }
     verbose(1, "Too many JIT code -- %d units unloaded", units_num - active_units.length);
 }
@@ -1235,7 +1330,7 @@ mjit_add_iseq_to_process(const rb_iseq_t *iseq)
 #define MJIT_WAIT_TIMEOUT_SECONDS 60
 
 /* Wait for JIT compilation finish for --jit-wait. This should only return a function pointer
-   or NOT_COMPILABLE_JIT_ISEQ_FUNC. */
+   or NOT_COMPILED_JIT_ISEQ_FUNC. */
 mjit_func_t
 mjit_get_iseq_func(struct rb_iseq_constant_body *body)
 {
@@ -1247,7 +1342,7 @@ mjit_get_iseq_func(struct rb_iseq_constant_body *body)
         tries++;
         if (tries / 1000 > MJIT_WAIT_TIMEOUT_SECONDS || pch_status == PCH_FAILED) {
             CRITICAL_SECTION_START(3, "in mjit_get_iseq_func to set jit_func");
-            body->jit_func = (mjit_func_t)NOT_COMPILABLE_JIT_ISEQ_FUNC; /* JIT worker seems dead. Give up. */
+            body->jit_func = (mjit_func_t)NOT_COMPILED_JIT_ISEQ_FUNC; /* JIT worker seems dead. Give up. */
             CRITICAL_SECTION_FINISH(3, "in mjit_get_iseq_func to set jit_func");
             if (mjit_opts.warnings || mjit_opts.verbose)
                 fprintf(stderr, "MJIT warning: timed out to wait for JIT finish\n");

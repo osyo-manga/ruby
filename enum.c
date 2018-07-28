@@ -938,7 +938,7 @@ first_i(RB_BLOCK_CALL_FUNC_ARGLIST(i, params))
     MEMO_V1_SET(memo, i);
     rb_iter_break();
 
-    UNREACHABLE;
+    UNREACHABLE_RETURN(Qnil);
 }
 
 static VALUE enum_take(VALUE obj, VALUE n);
@@ -3808,6 +3808,25 @@ sum_iter(VALUE i, struct enum_sum_memo *memo)
             memo->float_value = 0;
             goto some_value;
         }
+
+        if (isnan(f)) return;
+        if (isnan(x)) {
+            memo->v = i;
+            memo->f = x;
+            return;
+        }
+        if (isinf(x)) {
+            if (isinf(f) && signbit(x) != signbit(f)) {
+                memo->f = NAN;
+                memo->v = DBL2NUM(f);
+            }
+            else {
+                memo->f = x;
+                memo->v = i;
+            }
+            return;
+        }
+        if (isinf(f)) return;
 
         t = f + x;
         if (fabs(f) >= fabs(x))

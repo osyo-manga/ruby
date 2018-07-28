@@ -101,8 +101,8 @@ class RubyVM::BareInstructions
     }.join
   end
 
-  def handles_stack?
-    /\b(false|0)\b/ !~ @attrs['handles_stack'].expr.expr
+  def handles_sp?
+    /\b(false|0)\b/ !~ @attrs['handles_sp'].expr.expr
   end
 
   def inspect
@@ -129,7 +129,7 @@ class RubyVM::BareInstructions
     generate_attribute 'rb_num_t', 'retn', rets.size
     generate_attribute 'rb_num_t', 'width', width
     generate_attribute 'rb_snum_t', 'sp_inc', rets.size - pops.size
-    generate_attribute 'bool', 'handles_stack', false
+    generate_attribute 'bool', 'handles_sp', false
   end
 
   def typesplit a

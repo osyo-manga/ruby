@@ -43,8 +43,7 @@
        * sp_inc: Used to dynamically calculate sp increase in
          `insn_stack_increase`.
 
-       * handles_stack: If this is true, JIT makes sure that values are
-         set to VM stack.
+       * handles_sp: If it is true, VM deals with sp in the insn.
 
    - Attributes can access operands, but not stack (push/pop) variables.
 
@@ -240,8 +239,7 @@ setclassvariable
 }
 
 /* Get constant variable id. If klass is Qnil, constants
-   are searched in the current scope. If klass is Qfalse, constants
-   are searched as top level constants. Otherwise, get constant under klass
+   are searched in the current scope. Otherwise, get constant under klass
    class or module.
  */
 DEFINE_INSN
@@ -253,10 +251,7 @@ getconstant
     val = vm_get_ev_const(ec, klass, id, 0);
 }
 
-/* Set constant variable id. If klass is Qfalse, constant
-   is able to access in this scope. if klass is Qnil, set
-   top level constant. otherwise, set constant under klass
-   class or module.
+/* Set constant variable id under cbase class or module.
  */
 DEFINE_INSN
 setconstant
@@ -367,7 +362,6 @@ concatstrings
 // attr rb_snum_t sp_inc = 1 - num;
 {
     val = rb_str_concat_literals(num, STACK_ADDR_FROM_TOP(num));
-    POPN(num);
 }
 
 /* push the result of to_s. */
@@ -403,7 +397,6 @@ toregexp
     const VALUE ary = rb_ary_tmp_new_from_values(0, cnt, STACK_ADDR_FROM_TOP(cnt));
     val = rb_reg_new_ary(ary, (int)opt);
     rb_ary_clear(ary);
-    POPN(cnt);
 }
 
 /* intern str to Symbol and push it. */
@@ -425,7 +418,6 @@ newarray
 // attr rb_snum_t sp_inc = 1 - num;
 {
     val = rb_ary_new4(num, STACK_ADDR_FROM_TOP(num));
-    POPN(num);
 }
 
 /* dup array */
@@ -454,7 +446,7 @@ expandarray
 (...)
 // attr rb_snum_t sp_inc = num - 1 + (flag & 1 ? 1 : 0);
 {
-    INC_SP(vm_expandarray(GET_SP(), ary, num, (int)flag));
+    vm_expandarray(GET_SP(), ary, num, (int)flag);
 }
 
 /* concat two arrays */
@@ -491,7 +483,6 @@ newhash
 
     if (num) {
         rb_hash_bulk_insert(num, STACK_ADDR_FROM_TOP(num), val);
-        POPN(num);
     }
 }
 
@@ -541,7 +532,6 @@ dupn
     void *dst = GET_SP();
     void *src = STACK_ADDR_FROM_TOP(n);
 
-    INC_SP(n); /* alloca */
     MEMCPY(dst, src, VALUE, n);
 }
 
@@ -604,7 +594,7 @@ setn
 (VALUE val)
 // attr rb_snum_t sp_inc = 0;
 {
-    TOPN(n - 1) = val;
+    TOPN(n) = val;
 }
 
 /* empty current stack */
@@ -615,7 +605,7 @@ adjuststack
 (...)
 // attr rb_snum_t sp_inc = -(rb_snum_t)n;
 {
-    POPN(n);
+    /* none */
 }
 
 /**********************************************************/
@@ -693,7 +683,7 @@ defineclass
 (ID id, ISEQ class_iseq, rb_num_t flags)
 (VALUE cbase, VALUE super)
 (VALUE val)
-// attr bool handles_stack = true;
+// attr bool handles_sp = true;
 {
     VALUE klass = vm_find_or_create_class_by_id(id, flags, cbase, super);
 
@@ -720,7 +710,7 @@ send
 (CALL_INFO ci, CALL_CACHE cc, ISEQ blockiseq)
 (...)
 (VALUE val)
-// attr bool handles_stack = true;
+// attr bool handles_sp = true;
 // attr rb_snum_t sp_inc = - (int)(ci->orig_argc + ((ci->flag & VM_CALL_ARGS_BLOCKARG) ? 1 : 0));
 {
     struct rb_calling_info calling;
@@ -756,7 +746,6 @@ opt_newarray_max
 // attr rb_snum_t sp_inc = 1 - num;
 {
     val = vm_opt_newarray_max(num, STACK_ADDR_FROM_TOP(num));
-    POPN(num);
 }
 
 DEFINE_INSN
@@ -767,7 +756,6 @@ opt_newarray_min
 // attr rb_snum_t sp_inc = 1 - num;
 {
     val = vm_opt_newarray_min(num, STACK_ADDR_FROM_TOP(num));
-    POPN(num);
 }
 
 /* Invoke method without block */
@@ -776,7 +764,7 @@ opt_send_without_block
 (CALL_INFO ci, CALL_CACHE cc)
 (...)
 (VALUE val)
-// attr bool handles_stack = true;
+// attr bool handles_sp = true;
 // attr rb_snum_t sp_inc = -ci->orig_argc;
 {
     struct rb_calling_info calling;
@@ -791,7 +779,7 @@ invokesuper
 (CALL_INFO ci, CALL_CACHE cc, ISEQ blockiseq)
 (...)
 (VALUE val)
-// attr bool handles_stack = true;
+// attr bool handles_sp = true;
 // attr rb_snum_t sp_inc = - (int)(ci->orig_argc + ((ci->flag & VM_CALL_ARGS_BLOCKARG) ? 1 : 0));
 {
     struct rb_calling_info calling;
@@ -809,7 +797,7 @@ invokeblock
 (CALL_INFO ci)
 (...)
 (VALUE val)
-// attr bool handles_stack = true;
+// attr bool handles_sp = true;
 // attr rb_snum_t sp_inc = 1 - ci->orig_argc;
 {
     struct rb_calling_info calling;
@@ -836,7 +824,7 @@ leave
 ()
 (VALUE val)
 (VALUE val)
-// attr bool handles_stack = true;
+// attr bool handles_sp = true;
 {
     if (OPT_CHECKED_RUN) {
 	const VALUE *const bp = vm_base_ptr(reg_cfp);
@@ -999,8 +987,6 @@ opt_plus
 
     if (val == Qundef) {
 #ifndef MJIT_HEADER
-        PUSH(recv);
-        PUSH(obj);
         ADD_PC(-WIDTH_OF_opt_send_without_block);
 #endif
 	DISPATCH_ORIGINAL_INSN(opt_send_without_block);
@@ -1018,8 +1004,6 @@ opt_minus
 
     if (val == Qundef) {
 #ifndef MJIT_HEADER
-        PUSH(recv);
-        PUSH(obj);
         ADD_PC(-WIDTH_OF_opt_send_without_block);
 #endif
 	DISPATCH_ORIGINAL_INSN(opt_send_without_block);
@@ -1037,8 +1021,6 @@ opt_mult
 
     if (val == Qundef) {
 #ifndef MJIT_HEADER
-        PUSH(recv);
-        PUSH(obj);
         ADD_PC(-WIDTH_OF_opt_send_without_block);
 #endif
 	DISPATCH_ORIGINAL_INSN(opt_send_without_block);
@@ -1056,8 +1038,6 @@ opt_div
 
     if (val == Qundef) {
 #ifndef MJIT_HEADER
-        PUSH(recv);
-        PUSH(obj);
         ADD_PC(-WIDTH_OF_opt_send_without_block);
 #endif
 	DISPATCH_ORIGINAL_INSN(opt_send_without_block);
@@ -1075,8 +1055,6 @@ opt_mod
 
     if (val == Qundef) {
 #ifndef MJIT_HEADER
-        PUSH(recv);
-        PUSH(obj);
         ADD_PC(-WIDTH_OF_opt_send_without_block);
 #endif
 	DISPATCH_ORIGINAL_INSN(opt_send_without_block);
@@ -1094,8 +1072,6 @@ opt_eq
 
     if (val == Qundef) {
 #ifndef MJIT_HEADER
-        PUSH(recv);
-        PUSH(obj);
         ADD_PC(-WIDTH_OF_opt_send_without_block);
 #endif
 	DISPATCH_ORIGINAL_INSN(opt_send_without_block);
@@ -1113,8 +1089,6 @@ opt_neq
 
     if (val == Qundef) {
 #ifndef MJIT_HEADER
-        PUSH(recv);
-        PUSH(obj);
         ADD_PC(-WIDTH_OF_opt_send_without_block);
 #endif
 	DISPATCH_ORIGINAL_INSN(opt_send_without_block);
@@ -1132,8 +1106,6 @@ opt_lt
 
     if (val == Qundef) {
 #ifndef MJIT_HEADER
-        PUSH(recv);
-        PUSH(obj);
         ADD_PC(-WIDTH_OF_opt_send_without_block);
 #endif
 	DISPATCH_ORIGINAL_INSN(opt_send_without_block);
@@ -1151,8 +1123,6 @@ opt_le
 
     if (val == Qundef) {
 #ifndef MJIT_HEADER
-        PUSH(recv);
-        PUSH(obj);
         ADD_PC(-WIDTH_OF_opt_send_without_block);
 #endif
 	DISPATCH_ORIGINAL_INSN(opt_send_without_block);
@@ -1170,8 +1140,6 @@ opt_gt
 
     if (val == Qundef) {
 #ifndef MJIT_HEADER
-        PUSH(recv);
-        PUSH(obj);
         ADD_PC(-WIDTH_OF_opt_send_without_block);
 #endif
 	DISPATCH_ORIGINAL_INSN(opt_send_without_block);
@@ -1189,8 +1157,6 @@ opt_ge
 
     if (val == Qundef) {
 #ifndef MJIT_HEADER
-        PUSH(recv);
-        PUSH(obj);
         ADD_PC(-WIDTH_OF_opt_send_without_block);
 #endif
 	DISPATCH_ORIGINAL_INSN(opt_send_without_block);
@@ -1208,8 +1174,6 @@ opt_ltlt
 
     if (val == Qundef) {
 #ifndef MJIT_HEADER
-        PUSH(recv);
-        PUSH(obj);
         ADD_PC(-WIDTH_OF_opt_send_without_block);
 #endif
 	DISPATCH_ORIGINAL_INSN(opt_send_without_block);
@@ -1227,8 +1191,6 @@ opt_aref
 
     if (val == Qundef) {
 #ifndef MJIT_HEADER
-        PUSH(recv);
-        PUSH(obj);
         ADD_PC(-WIDTH_OF_opt_send_without_block);
 #endif
 	DISPATCH_ORIGINAL_INSN(opt_send_without_block);
@@ -1246,9 +1208,6 @@ opt_aset
 
     if (val == Qundef) {
 #ifndef MJIT_HEADER
-        PUSH(recv);
-        PUSH(obj);
-        PUSH(set);
         ADD_PC(-WIDTH_OF_opt_send_without_block);
 #endif
 	DISPATCH_ORIGINAL_INSN(opt_send_without_block);
@@ -1269,9 +1228,8 @@ opt_aset_with
     }
     else {
 #ifndef MJIT_HEADER
-        PUSH(recv);
-        PUSH(rb_str_resurrect(key));
-        PUSH(val);
+	TOPN(0) = rb_str_resurrect(key);
+	PUSH(val);
         ADD_PC(-WIDTH_OF_opt_send_without_block);
 #endif
 	DISPATCH_ORIGINAL_INSN(opt_send_without_block);
@@ -1289,8 +1247,7 @@ opt_aref_with
 
     if (val == Qundef) {
 #ifndef MJIT_HEADER
-        PUSH(recv);
-        PUSH(rb_str_resurrect(key));
+	PUSH(rb_str_resurrect(key));
         ADD_PC(-WIDTH_OF_opt_send_without_block);
 #endif
 	DISPATCH_ORIGINAL_INSN(opt_send_without_block);
@@ -1308,7 +1265,6 @@ opt_length
 
     if (val == Qundef) {
 #ifndef MJIT_HEADER
-        PUSH(recv);
         ADD_PC(-WIDTH_OF_opt_send_without_block);
 #endif
 	DISPATCH_ORIGINAL_INSN(opt_send_without_block);
@@ -1326,7 +1282,6 @@ opt_size
 
     if (val == Qundef) {
 #ifndef MJIT_HEADER
-        PUSH(recv);
         ADD_PC(-WIDTH_OF_opt_send_without_block);
 #endif
 	DISPATCH_ORIGINAL_INSN(opt_send_without_block);
@@ -1344,7 +1299,6 @@ opt_empty_p
 
     if (val == Qundef) {
 #ifndef MJIT_HEADER
-        PUSH(recv);
         ADD_PC(-WIDTH_OF_opt_send_without_block);
 #endif
 	DISPATCH_ORIGINAL_INSN(opt_send_without_block);
@@ -1362,7 +1316,6 @@ opt_succ
 
     if (val == Qundef) {
 #ifndef MJIT_HEADER
-        PUSH(recv);
         ADD_PC(-WIDTH_OF_opt_send_without_block);
 #endif
 	DISPATCH_ORIGINAL_INSN(opt_send_without_block);
@@ -1380,7 +1333,6 @@ opt_not
 
     if (val == Qundef) {
 #ifndef MJIT_HEADER
-        PUSH(recv);
         ADD_PC(-WIDTH_OF_opt_send_without_block);
 #endif
 	DISPATCH_ORIGINAL_INSN(opt_send_without_block);
@@ -1408,8 +1360,6 @@ opt_regexpmatch2
 
     if (val == Qundef) {
 #ifndef MJIT_HEADER
-        PUSH(obj2);
-        PUSH(obj1);
         ADD_PC(-WIDTH_OF_opt_send_without_block);
 #endif
 	DISPATCH_ORIGINAL_INSN(opt_send_without_block);
@@ -1422,7 +1372,7 @@ opt_call_c_function
 (rb_insn_func_t funcptr)
 ()
 ()
-// attr bool handles_stack = true;
+// attr bool handles_sp = true;
 {
     reg_cfp = (funcptr)(ec, reg_cfp);
 

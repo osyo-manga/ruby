@@ -529,6 +529,34 @@ class TestJIT < Test::Unit::TestCase
     assert_match(/^Successful MJIT finish$/, err)
   end
 
+  def test_unload_units
+    Dir.mktmpdir("jit_test_clean_so_") do |dir|
+      # MIN_CACHE_SIZE is 10
+      out, err = eval_with_jit({"TMPDIR"=>dir}, "#{<<~"begin;"}\n#{<<~'end;'}", verbose: 1, min_calls: 1, max_cache: 10)
+      begin;
+        10.times do |i|
+          eval(<<-EOS)
+            def mjit#{i}
+              print #{i}
+            end
+            mjit#{i}
+          EOS
+        end
+      end;
+      assert_equal('0123456789', out)
+      errs = err.lines
+      assert_match(/\A#{JIT_SUCCESS_PREFIX}: block in <main>@-e:/, errs[0])
+      9.times do |i|
+        assert_match(/\A#{JIT_SUCCESS_PREFIX}: mjit#{i}@\(eval\):/, errs[i + 1])
+      end
+      assert_equal("Too many JIT code -- 1 units unloaded\n", errs[10])
+      assert_match(/\A#{JIT_SUCCESS_PREFIX}: mjit9@\(eval\):/, errs[11])
+
+      # verify .o files are deleted on unload_units
+      assert_send([Dir, :empty?, dir])
+    end
+  end
+
   def test_local_stack_on_exception
     assert_eval_with_jit("#{<<~"begin;"}\n#{<<~"end;"}", stdout: '3', success_count: 2)
     begin;
@@ -679,7 +707,7 @@ class TestJIT < Test::Unit::TestCase
     assert_eval_with_jit("#{<<~"begin;"}\n#{<<~"end;"}", stdout: "nil\nnil\n", success_count: 1)
     begin;
       2.times do
-        a, b = nil
+        a, _ = nil
         p a
       end
     end;
@@ -729,19 +757,6 @@ class TestJIT < Test::Unit::TestCase
   def assert_eval_with_jit(script, stdout: nil, success_count:, min_calls: 1, insns: [], uplevel: 3)
     out, err = eval_with_jit(script, verbose: 1, min_calls: min_calls)
     actual = err.scan(/^#{JIT_SUCCESS_PREFIX}:/).size
-
-    # Debugging on CI
-    if err.include?("error trying to exec 'cc1': execvp: No such file or directory") && RbConfig::CONFIG['CC'].start_with?('gcc')
-      $stderr.puts "\ntest/ruby/test_jit.rb: DEBUG OUTPUT:"
-      cc1 = %x`gcc -print-prog-name=cc1`.rstrip
-      if $?.success?
-        $stderr.puts "cc1 path: #{cc1}"
-        $stderr.puts "executable?: #{File.executable?(cc1)}"
-        $stderr.puts "ls:\n#{IO.popen(['ls', '-la', File.dirname(cc1)], &:read)}"
-      else
-        $stderr.puts 'Failed to fetch cc1 path'
-      end
-    end
 
     # Make sure that the script has insns expected to be tested
     used_insns = method_insns(script)
@@ -799,9 +814,20 @@ class TestJIT < Test::Unit::TestCase
   # Run Ruby script with --jit-wait (Synchronous JIT compilation).
   # Returns [stdout, stderr]
   def eval_with_jit(env = nil, script, **opts)
-    stdout, stderr, status = super
-    assert_equal(true, status.success?, "Failed to run script with JIT:\n#{code_block(script)}\nstdout:\n#{code_block(stdout)}\nstderr:\n#{code_block(stderr)}")
+    stdout, stderr = nil, nil
+    # retry 3 times while cc1 error happens.
+    3.times do |i|
+      stdout, stderr, status = super
+      assert_equal(true, status.success?, "Failed to run script with JIT:\n#{code_block(script)}\nstdout:\n#{code_block(stdout)}\nstderr:\n#{code_block(stderr)}")
+      break unless retried_stderr?(stderr)
+    end
     [stdout, stderr]
+  end
+
+  # We're retrying cc1 not found error on gcc, which should be solved in the future but ignored for now.
+  def retried_stderr?(stderr)
+    RbConfig::CONFIG['CC'].start_with?('gcc') &&
+      stderr.include?("error trying to exec 'cc1': execvp: No such file or directory")
   end
 
   def code_block(code)
