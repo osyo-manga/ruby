@@ -848,7 +848,7 @@ static void token_info_warn(struct parser_params *p, const char *token, token_in
 
 %type <node> singleton strings string string1 xstring regexp
 %type <node> string_contents xstring_contents regexp_contents string_content
-%type <node> words symbols symbol_list qwords qsymbols word_list qword_list qsym_list word
+%type <node> words symbols symbol_list qwords qsymbols word_list qword_list qsym_list word  hashexpand hashexpand_list
 %type <node> literal numeric simple_numeric dsym cpath
 %type <node> top_compstmt top_stmts top_stmt begin_block
 %type <node> bodystmt compstmt stmts stmt_or_begin stmt expr arg primary command command_call method_call
@@ -932,7 +932,7 @@ static void token_info_warn(struct parser_params *p, const char *token, token_in
 %token tDSTAR		"**arg"
 %token tAMPER		"&"
 %token tLAMBDA		"->"
-%token tSYMBEG tSTRING_BEG tXSTRING_BEG tREGEXP_BEG tWORDS_BEG tQWORDS_BEG tSYMBOLS_BEG tQSYMBOLS_BEG
+%token tSYMBEG tSTRING_BEG tXSTRING_BEG tREGEXP_BEG tWORDS_BEG tQWORDS_BEG tSYMBOLS_BEG tQSYMBOLS_BEG tHASHEXPAND_BEG
 %token tSTRING_DBEG tSTRING_DEND tSTRING_DVAR tSTRING_END tLAMBEG tLABEL_END
 
 /*
@@ -2359,6 +2359,7 @@ primary		: literal
 		| qwords
 		| symbols
 		| qsymbols
+		| hashexpand
 		| var_ref
 		| backref
 		| tFID
@@ -3719,6 +3720,7 @@ p_primitive	: literal
 		| qwords
 		| symbols
 		| qsymbols
+		| hashexpand
 		| keyword_variable
 		    {
 		    /*%%%*/
@@ -3952,6 +3954,34 @@ qsym_list	: /* none */
 			$$ = symbol_append(p, $1, $2);
 		    /*% %*/
 		    /*% ripper: qsymbols_add!($1, $2) %*/
+		    }
+		;
+
+hashexpand	: tHASHEXPAND_BEG ' ' hashexpand_list tSTRING_END
+		    {
+		    /*%%%*/
+			$$ = new_hash(p, $3, &@$);
+		    /*% %*/
+		    /*% ripper: hash!($3) %*/
+		    }
+		;
+
+hashexpand_list	: /* none */
+		    {
+		    /*%%%*/
+			$$ = 0;
+		    /*% %*/
+		    /*% ripper: hashexpand_new! %*/
+		    }
+		| hashexpand_list string_content ' '
+		    {
+		    /*%%%*/
+			NODE *key, *val;
+			key = NEW_CALL($2, rb_intern("to_sym"), 0, &@$);
+			val = NEW_FCALL(rb_intern("eval"), NEW_LIST($2, &@$), &@$);
+			$$ = list_append(p, list_append(p, $1, key), val);
+		    /*% %*/
+		    /*% ripper: hashexpand_add!(hashexpand_add!($1, $2), $2) %*/
 		    }
 		;
 
@@ -7694,6 +7724,10 @@ parse_percent(struct parser_params *p, const int space_seen, const enum lex_stat
 	    p->lex.strterm = NEW_STRTERM(str_ssym, term, paren);
 	    SET_LEX_STATE(EXPR_FNAME|EXPR_FITEM);
 	    return tSYMBEG;
+
+	  case 'h':
+	    p->lex.strterm = NEW_STRTERM(str_sword, term, paren);
+	    return tHASHEXPAND_BEG;
 
 	  default:
 	    yyerror0("unknown type of %string");
