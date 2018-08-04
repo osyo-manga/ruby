@@ -123,9 +123,11 @@
 void *rb_register_sigaltstack(void);
 #  define RB_ALTSTACK_INIT(var) var = rb_register_sigaltstack()
 #  define RB_ALTSTACK_FREE(var) xfree(var)
+#  define RB_ALTSTACK(var)  var
 #else /* noop */
 #  define RB_ALTSTACK_INIT(var)
 #  define RB_ALTSTACK_FREE(var)
+#  define RB_ALTSTACK(var) (0)
 #endif
 
 /*****************/
@@ -562,10 +564,12 @@ typedef struct rb_vm_struct {
     VALUE self;
 
     rb_global_vm_lock_t gvl;
-    rb_nativethread_lock_t    thread_destruct_lock;
 
     struct rb_thread_struct *main_thread;
-    struct rb_thread_struct *running_thread;
+
+    /* persists across uncontended GVL release/acquire for time slice */
+    const struct rb_thread_struct *running_thread;
+
 #ifdef USE_SIGALTSTACK
     void *main_altstack;
 #endif
@@ -807,7 +811,6 @@ typedef struct rb_execution_context_struct {
 
     struct rb_vm_tag *tag;
     struct rb_vm_protect_tag *protect_tag;
-    int raised_flag;
 
     /* interrupt flags */
     rb_atomic_t interrupt_flag;
@@ -835,6 +838,7 @@ typedef struct rb_execution_context_struct {
     VALUE errinfo;
     VALUE passed_block_handler; /* for rb_iterate */
     const rb_callable_method_entry_t *passed_bmethod_me; /* for bmethod */
+    int raised_flag;
     enum method_missing_reason method_missing_reason;
     VALUE private_const_reference;
 
@@ -893,7 +897,6 @@ typedef struct rb_thread_struct {
     /* async errinfo queue */
     VALUE pending_interrupt_queue;
     VALUE pending_interrupt_mask_stack;
-    int pending_interrupt_queue_checked;
 
     /* interrupt management */
     rb_nativethread_lock_t interrupt_lock;
@@ -915,10 +918,13 @@ typedef struct rb_thread_struct {
     rb_jmpbuf_t root_jmpbuf;
 
     /* misc */
+    VALUE name;
+    uint32_t running_time_us; /* 12500..800000 */
+
+    /* bit flags */
     unsigned int abort_on_exception: 1;
     unsigned int report_on_exception: 1;
-    uint32_t running_time_us; /* 12500..800000 */
-    VALUE name;
+    unsigned int pending_interrupt_queue_checked: 1;
 } rb_thread_t;
 
 typedef enum {
@@ -1577,7 +1583,7 @@ void rb_vm_pop_frame(rb_execution_context_t *ec);
 void rb_thread_start_timer_thread(void);
 void rb_thread_stop_timer_thread(void);
 void rb_thread_reset_timer_thread(void);
-void rb_thread_wakeup_timer_thread(void);
+void rb_thread_wakeup_timer_thread(int);
 
 static inline void
 rb_vm_living_threads_init(rb_vm_t *vm)

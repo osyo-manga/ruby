@@ -181,7 +181,7 @@ def sync_default_gems(gem)
   when "thwait"
     `rm -rf lib/thwait*`
     `cp -rf ../thwait/lib/* lib`
-    `cp -rf ../thwait/thwait.gemspec lib`
+    `cp -rf ../thwait/thwait.gemspec lib/thwait`
   when "e2mmap"
     `rm -rf lib/e2mmap*`
     `cp -rf ../e2mmap/lib/* lib`
@@ -193,19 +193,14 @@ def sync_default_gems(gem)
     `cp -f ../strscan/strscan.gemspec ext/strscan`
     `rm -f ext/strscan/regenc.h ext/strscan/regint.h`
     `git checkout ext/strscan/depend`
-  when "sync"
-    `rm -rf lib/sync.rb test/thread/test_sync.rb`
-    `cp -rf ../sync/lib/* lib`
-    `cp -rf ../sync/test/thread test`
-    `cp -f ../sync/sync.gemspec lib`
-  when "rexml", "rss", "matrix", "irb", "csv", "shell", "logger", "ostruct", "scanf", "webrick", "fileutils", "forwardable", "prime", "tracer", "ipaddr", "cmath", "mutex_m"
+  when "rexml", "rss", "matrix", "irb", "csv", "shell", "logger", "ostruct", "scanf", "webrick", "fileutils", "forwardable", "prime", "tracer", "ipaddr", "cmath", "mutex_m", "sync"
     sync_lib gem
   else
   end
 end
 
 def sync_lib(repo)
-  `rm -rf lib/#{repo}.rb lib/#{repo}/* test/test_#{repo}.rb test/#{repo}`
+  `rm -rf lib/#{repo}.rb lib/#{repo}/* test/test_#{repo}.rb`
   `cp -rf ../#{repo}/lib/* lib`
   tests = if File.directory?("test/#{repo}")
             "test/#{repo}"

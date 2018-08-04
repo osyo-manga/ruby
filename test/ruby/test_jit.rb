@@ -7,6 +7,10 @@ require_relative '../lib/jit_support'
 class TestJIT < Test::Unit::TestCase
   include JITSupport
 
+  IGNORABLE_PATTERNS = [
+    /\ASuccessful MJIT finish\n\z/,
+  ]
+
   # trace_* insns are not compiled for now...
   TEST_PENDING_INSNS = RubyVM::INSTRUCTION_NAMES.select { |n| n.start_with?('trace_') }.map(&:to_sym) + [
     # not supported yet
@@ -159,14 +163,18 @@ class TestJIT < Test::Unit::TestCase
   end
 
   def test_compile_insn_putspecialobject_putiseq
-    assert_eval_with_jit("#{<<~"begin;"}\n#{<<~"end;"}", stdout: 'hello', success_count: 2, insns: %i[putspecialobject putiseq])
+    if /mingw/ =~ RUBY_PLATFORM
+      skip "this is currently failing on MinGW [Bug #14948]"
+    end
+
+    assert_eval_with_jit("#{<<~"begin;"}\n#{<<~"end;"}", stdout: 'hellohello', success_count: 2, insns: %i[putspecialobject putiseq])
     begin;
-      print proc {
+      print 2.times.map {
         def method_definition
           'hello'
         end
         method_definition
-      }.call
+      }.join
     end;
   end
 
@@ -530,27 +538,36 @@ class TestJIT < Test::Unit::TestCase
   end
 
   def test_unload_units
-    Dir.mktmpdir("jit_test_clean_so_") do |dir|
+    Dir.mktmpdir("jit_test_unload_units_") do |dir|
       # MIN_CACHE_SIZE is 10
       out, err = eval_with_jit({"TMPDIR"=>dir}, "#{<<~"begin;"}\n#{<<~'end;'}", verbose: 1, min_calls: 1, max_cache: 10)
       begin;
-        10.times do |i|
+        i = 0
+        while i < 11
           eval(<<-EOS)
             def mjit#{i}
               print #{i}
             end
             mjit#{i}
           EOS
+          i += 1
         end
       end;
-      assert_equal('0123456789', out)
-      errs = err.lines
-      assert_match(/\A#{JIT_SUCCESS_PREFIX}: block in <main>@-e:/, errs[0])
-      9.times do |i|
-        assert_match(/\A#{JIT_SUCCESS_PREFIX}: mjit#{i}@\(eval\):/, errs[i + 1])
+      assert_equal('012345678910', out)
+      compactions, errs = err.lines.partition do |l|
+        l.match?(/\AJIT compaction \(\d+\.\dms\): Compacted \d+ methods ->/)
+      end
+      10.times do |i|
+        assert_match(/\A#{JIT_SUCCESS_PREFIX}: mjit#{i}@\(eval\):/, errs[i])
       end
       assert_equal("Too many JIT code -- 1 units unloaded\n", errs[10])
-      assert_match(/\A#{JIT_SUCCESS_PREFIX}: mjit9@\(eval\):/, errs[11])
+      assert_match(/\A#{JIT_SUCCESS_PREFIX}: mjit10@\(eval\):/, errs[11])
+
+      # On --jit-wait, when the number of JIT-ed code reaches --jit-max-cache,
+      # it should trigger compaction.
+      unless RUBY_PLATFORM.match?(/mswin|mingw/) # compaction is not supported on Windows yet
+        assert_equal(2, compactions.size)
+      end
 
       # verify .o files are deleted on unload_units
       assert_send([Dir, :empty?, dir])
@@ -776,7 +793,9 @@ class TestJIT < Test::Unit::TestCase
     if stdout
       assert_equal(stdout, out, "Expected stdout #{out.inspect} to match #{stdout.inspect} with script:\n#{code_block(script)}")
     end
-    err_lines = err.lines.reject! { |l| l.chomp.empty? || l.match?(/\A#{JIT_SUCCESS_PREFIX}/) || l == "Successful MJIT finish\n" }
+    err_lines = err.lines.reject! do |l|
+      l.chomp.empty? || l.match?(/\A#{JIT_SUCCESS_PREFIX}/) || IGNORABLE_PATTERNS.any? { |pat| pat.match?(l) }
+    end
     unless err_lines.empty?
       warn err_lines.join(''), uplevel: uplevel
     end
