@@ -1200,6 +1200,43 @@ x = __ENCODING__
     assert_valid_syntax('let () { m(a) do; end }')
   end
 
+  def test_hashexpand_meth
+    "test_hashexpand_meth"
+  end
+
+  def test_hashexpand
+    hoge = 1
+    foo = "str"
+    bar = nil
+    @test_hashexpand_value = { a: 1 }
+    @@test_hashexpand_value = [1, 2]
+    hash = %h(hoge foo bar @test_hashexpand_value @@test_hashexpand_value test_hashexpand_meth)
+
+    assert_equal(
+      hash,
+      { hoge: 1, foo: "str", bar: nil, "@test_hashexpand_value": { a: 1}, "@@test_hashexpand_value": [1, 2], test_hashexpand_meth: "test_hashexpand_meth" }
+    )
+
+    assert_equal(
+      hash.keys,
+      %i(hoge foo bar @test_hashexpand_value @@test_hashexpand_value test_hashexpand_meth)
+    )
+
+    assert_operator(Hash, :===, hash)
+
+    proc { |value|
+      hoge = -1
+      assert_equal(%h(hoge foo value), { hoge: -1, foo: "str", value: 42 })
+    }.call 42
+
+    assert_equal(%h(hoge foo hoge), { hoge: hoge, foo: foo })
+    assert_equal(%h(hoge foo hoge).keys, %i(hoge foo))
+
+    assert_raise(NameError) do
+      %h(not_found)
+    end
+  end
+
 =begin
   def test_past_scope_variable
     assert_warning(/past scope/) {catch {|tag| eval("BEGIN{throw tag}; tap {a = 1}; a")}}
