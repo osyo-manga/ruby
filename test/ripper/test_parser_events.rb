@@ -1045,6 +1045,16 @@ class TestRipper::ParserEvents < Test::Unit::TestCase
     assert_equal '[array([:a])]', tree
   end
 
+  def test_hashexpand_add
+    thru_hasexpand_add = false
+    a = 1
+    b = 2
+    tree = parse('%h[a,b]', :on_hashexpand_add) {thru_hasexpand_add = true}
+    pp tree
+#     assert_equal true, thru_hasexpand_add
+#     assert_equal '[hash([:a,a,:b,b])]', tree
+  end
+
   def test_qwords_new
     thru_qwords_new = false
     parse('%w[]', :on_qwords_new) {thru_qwords_new = true}
@@ -1061,6 +1071,12 @@ class TestRipper::ParserEvents < Test::Unit::TestCase
     thru_symbols_new = false
     parse('%I[]', :on_symbols_new) {thru_symbols_new = true}
     assert_equal true, thru_symbols_new
+  end
+
+  def test_hashexpand_new
+    thru_hashexpand_new = false
+    parse('%h[]', :on_hashexpand_new) {thru_hashexpand_new = true}
+    assert_equal true, thru_hashexpand_new
   end
 
   def test_redo

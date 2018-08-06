@@ -244,6 +244,17 @@ class DummyParser < Ripper
     symbols.push Node::Sym.new(symbol)
   end
 
+  def on_hashexpand_new
+#     NodeList.new
+    Node.new('assoc')
+  end
+
+  def on_hashexpand_add(hashexpand, str)
+    pp hashexpand
+#     hashexpand.push Node::Sym.new(str)
+#     hashexpand.push str
+  end
+
   def on_mlhs_new
     NodeList.new
   end

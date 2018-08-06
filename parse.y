@@ -3976,12 +3976,14 @@ hashexpand_list	: /* none */
 		| hashexpand_list string_content ' '
 		    {
 		    /*%%%*/
-			NODE *key, *val;
-			key = NEW_CALL($2, rb_intern("to_sym"), 0, &@$);
-			val = NEW_FCALL(rb_intern("eval"), NEW_LIST($2, &@$), &@$);
+			NODE *key, *val, *estr;
+			estr = evstr2dstr(p, $2);
+			estr = $2;
+			key = NEW_CALL(estr, rb_intern("to_sym"), 0, &@$);
+			val = NEW_FCALL(rb_intern("eval"), NEW_LIST(estr, &@$), &@$);
 			$$ = list_append(p, list_append(p, $1, key), val);
 		    /*% %*/
-		    /*% ripper: hashexpand_add!(hashexpand_add!($1, $2), $2) %*/
+		    /*% ripper: hashexpand_add!($1, $2) %*/
 		    }
 		;
 
@@ -7726,7 +7728,7 @@ parse_percent(struct parser_params *p, const int space_seen, const enum lex_stat
 	    return tSYMBEG;
 
 	  case 'h':
-	    p->lex.strterm = NEW_STRTERM(str_sword, term, paren);
+	    p->lex.strterm = NEW_STRTERM(str_dword, term, paren);
 	    return tHASHEXPAND_BEG;
 
 	  default:

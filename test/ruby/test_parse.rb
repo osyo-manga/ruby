@@ -1222,6 +1222,10 @@ x = __ENCODING__
       %i(hoge foo bar @test_hashexpand_value @@test_hashexpand_value test_hashexpand_meth)
     )
 
+    str = 42
+    pp %h(#{foo})
+    assert_equal(%h(#{foo}), { str: 42 })
+
     assert_operator(Hash, :===, hash)
 
     proc { |value|

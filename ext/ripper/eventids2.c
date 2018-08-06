@@ -42,6 +42,7 @@ typedef struct {
     ID ripper_id_words_beg;
     ID ripper_id_qwords_beg;
     ID ripper_id_qsymbols_beg;
+    ID ripper_id_hashexpand_beg;
     ID ripper_id_symbols_beg;
     ID ripper_id_words_sep;
     ID ripper_id_rational;
@@ -104,6 +105,7 @@ ripper_init_eventids2(void)
     set_id2(words_beg);
     set_id2(qwords_beg);
     set_id2(qsymbols_beg);
+    set_id2(hashexpand_beg);
     set_id2(symbols_beg);
     set_id2(words_sep);
     set_id2(rational);
@@ -250,6 +252,7 @@ static const struct token_assoc {
     {tPOW,			O(op)},
     {tQWORDS_BEG,		O(qwords_beg)},
     {tQSYMBOLS_BEG,		O(qsymbols_beg)},
+    {tHASHEXPAND_BEG,		O(hashexpand_beg)},
     {tSYMBOLS_BEG,		O(symbols_beg)},
     {tRATIONAL,			O(rational)},
     {tREGEXP_BEG,		O(regexp_beg)},
