@@ -682,6 +682,19 @@ class TestRipper::ScannerEvents < Test::Unit::TestCase
                  scan('symbols_beg', "%I(\nw)")
   end
 
+  def test_hashexpand_beg
+    assert_equal [],
+                 scan('hashexpand_beg', '')
+    assert_equal ['%h('],
+                 scan('hashexpand_beg', '%h()')
+    assert_equal ['%h('],
+                 scan('hashexpand_beg', '%h(w w w)')
+    assert_equal ['%h('],
+                 scan('hashexpand_beg', '%h( w w w )')
+    assert_equal ['%h('],
+                 scan('hashexpand_beg', "%h(\nw)")
+  end
+
   def test_words_sep
     assert_equal [],
                  scan('words_sep', '')
