@@ -3971,7 +3971,7 @@ recursive_eqq(VALUE ary1, VALUE ary2, int recur)
 
     for (i = 0; i < len1; i++) {
 	if (*p1 != *p2) {
-	    if (rb_funcall(*p1, idEqq, 1, *p2)) {
+	    if (rb_funcall(*p1, idEqq, 1, *p2) || rb_equal(*p1, *p2)) {
 		len1 = RARRAY_LEN(ary1);
 		if (len1 != RARRAY_LEN(ary2))
 		    return Qfalse;

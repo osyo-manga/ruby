@@ -2403,6 +2403,11 @@ class TestArray < Test::Unit::TestCase
     b[0] = b
     assert_operator(a, :===, b)
 
+    o2 = Object.new
+    def o2.==(x); true; end
+    def o2.===(x); false; end
+    assert_operator([o2], :===, [1])
+
     assert_not_operator([o, o], :===, [0, 1, 2])
     assert_not_operator([o, o, o], :===, [0, 1])
     assert_not_operator([0, 1, 2], :===, [o, o, o])
