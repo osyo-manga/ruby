@@ -2408,6 +2408,12 @@ class TestArray < Test::Unit::TestCase
     def o2.===(x); false; end
     assert_operator([o2], :===, [1])
 
+    o3 = Object.new
+    def o3.to_ary
+      [1]
+    end
+    assert_operator([Integer], :===, o3)
+
     assert_not_operator([o, o], :===, [0, 1, 2])
     assert_not_operator([o, o, o], :===, [0, 1])
     assert_not_operator([0, 1, 2], :===, [o, o, o])
