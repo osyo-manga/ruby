@@ -2446,13 +2446,38 @@ recursive_eqq(VALUE hash, VALUE dt, int recur)
     return data->result;
 }
 
+/*
+ *  call-eqq:
+ *     hsh === other_hash    -> true or false
+ *
+ *  Equality(===)---Two hashes are equal if they each contain the same number
+ *  of keys and if each key-value pair is equal to (according to
+ *  <code>Object#===</code>) the corresponding elements in the other
+ *  hash.
+ *
+ *     h1 = { "a" => "hoge", "b" => 2 }
+ *     h2 = { "a" => 1, "b" => 2, "c" => 35 }
+ *     { "a" => String, "c" => Integer } === h1     #=> true
+ *     { "a" => String } === h1                     #=> true
+ *     { "a" => Integer, "c" => String } === h1     #=> false
+ *     { "b" => Integer, "c" => (1..100) } === h2   #=> true
+ *
+ */
+
 static VALUE
 rb_hash_eqq(VALUE hash1, VALUE hash2)
 {
     struct equal_data data;
 
     if (hash1 == hash2) return Qtrue;
-    if (!RB_TYPE_P(hash2, T_HASH)) return Qfalse;
+    if (!RB_TYPE_P(hash2, T_HASH)) {
+	if (rb_respond_to(hash2, idTo_hash)) {
+	    return rb_hash_eqq(hash1, to_hash(hash2));
+	}
+	else {
+	    return Qfalse;
+	}
+    }
     if (RHASH_EMPTY_P(hash1))
 	return RHASH_EMPTY_P(hash2) ? Qtrue : Qfalse;
     if (RHASH_SIZE(hash1) > RHASH_SIZE(hash2))

@@ -1128,6 +1128,12 @@ class TestHash < Test::Unit::TestCase
     b[:a] = b
     assert_operator(a, :===, b)
 
+    o2 = Object.new
+    def o2.to_hash
+      { name: "homu", age: 14 }
+    end
+    assert_operator({ name: /^h/ }, :===, o2)
+
     assert_not_operator({ id: 2 }, :===, user)
     assert_not_operator({ name: Integer }, :===, user)
     assert_not_operator({ number: 42 }, :===, user)
