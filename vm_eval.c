@@ -146,6 +146,7 @@ vm_call0_body(rb_execution_context_t *ec, struct rb_calling_info *calling, const
       case VM_METHOD_TYPE_ZSUPER:
       case VM_METHOD_TYPE_REFINED:
 	{
+            printf("VM_METHOD_TYPE_REFINED dayo\n");
 	    const rb_method_type_t type = cc->me->def->type;
 	    VALUE super_class = cc->me->defined_class;
 
@@ -161,6 +162,7 @@ vm_call0_body(rb_execution_context_t *ec, struct rb_calling_info *calling, const
 
 	    if (!super_class || !(cc->me = rb_callable_method_entry(super_class, ci->mid))) {
 		enum method_missing_reason ex = (type == VM_METHOD_TYPE_ZSUPER) ? MISSING_SUPER : 0;
+                printf("method_missing dayo\n");
 		ret = method_missing(calling->recv, ci->mid, calling->argc, argv, ex);
 		goto success;
 	    }

@@ -870,13 +870,16 @@ static const rb_method_entry_t *
 method_entry_resolve_refinement(VALUE klass, ID id, int with_refinement, VALUE *defined_class_ptr)
 {
     const rb_method_entry_t *me = method_entry_get(klass, id, defined_class_ptr);
+    printf("me2 : %016x\n", (int)me);
 
     if (me) {
 	if (me->def->type == VM_METHOD_TYPE_REFINED) {
 	    if (with_refinement) {
 		const rb_cref_t *cref = rb_vm_cref();
 		VALUE refinements = cref ? CREF_REFINEMENTS(cref) : Qnil;
+                printf("with_refinement dayo\n");
 		me = resolve_refined_method(refinements, me, defined_class_ptr);
+                printf("me3 : %016x\n", (int)me);
 	    }
 	    else {
 		me = resolve_refined_method(Qnil, me, defined_class_ptr);

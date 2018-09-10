@@ -852,19 +852,24 @@ refine_sym_proc_call(RB_BLOCK_CALL_FUNC_ARGLIST(yielded_arg, callback_arg))
     const rb_callable_method_entry_t *me;
     rb_execution_context_t *ec;
 
+//     printf("homu\n");
+
     if (argc-- < 1) {
 	rb_raise(rb_eArgError, "no receiver given");
     }
     obj = *argv++;
     mid = SYM2ID(callback_arg);
     me = rb_callable_method_entry_with_refinements(CLASS_OF(obj), mid, NULL);
+    printf("me : %016x\n", (int)me);
     ec = GET_EC();
+    printf("call ec: %016x\n", (int)ec);
     if (!NIL_P(blockarg)) {
 	vm_passed_block_handler_set(ec, blockarg);
     }
     if (!me) {
 	return method_missing(obj, mid, argc, argv, MISSING_NOENTRY);
     }
+    printf("rb_vm_call0\n");
     return rb_vm_call0(ec, obj, mid, argc, argv, me);
 }
 
@@ -889,9 +894,11 @@ vm_caller_setup_arg_block(const rb_execution_context_t *ec, rb_control_frame_t *
 		if (NIL_P(func)) {
 		    /* TODO: limit cached funcs */
 		    func = rb_func_proc_new(refine_sym_proc_call, block_code);
+		    printf("&:hoge ec: %016x\n", (int)ec);
 		    rb_hash_aset(ref, block_code, func);
 		}
 		block_code = func;
+		printf("=== end ===\n");
 	    }
             return block_code;
         }
